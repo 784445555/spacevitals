@@ -148,13 +148,17 @@
       const last = bone[bone.length - 1], prev = bone.length > 1 ? bone[bone.length - 2] : null;
       const pct = (last[k] - base) / base * 100;
       const mag = B.both ? Math.abs(pct) : pct;
-      const level = last.day <= 1 ? "normal" : mag >= B.crit ? "critical" : mag >= B.att ? "attention" : "normal";
+      let level = last.day <= 1 ? "normal" : mag >= B.crit ? "critical" : mag >= B.att ? "attention" : "normal";
+      // Confirmation rule: a single test can raise Attention, but Critical needs the previous test above threshold too.
+      const prevPct = prev && prev.day > 1 ? (prev[k] - base) / base * 100 : null;
+      const confirmed = prevPct !== null && (B.both ? Math.abs(prevPct) : prevPct) >= B.att;
+      if (level === "critical" && !confirmed) level = "attention";
       const rising = bone.length >= 3 && bone[bone.length - 1][k] > bone[bone.length - 2][k] && bone[bone.length - 2][k] > bone[bone.length - 3][k];
-      boneRes[k] = { base, last: last[k], lastDay: last.day, prev: prev ? prev[k] : null, prevDay: prev ? prev.day : null, pct, level, rising, series: bone.map(t => ({ day: t.day, v: t[k], pct: (t[k] - base) / base * 100, manual: t.manual })) };
+      boneRes[k] = { base, last: last[k], lastDay: last.day, prev: prev ? prev[k] : null, prevDay: prev ? prev.day : null, pct, level, rising, confirmed, series: bone.map(t => ({ day: t.day, v: t[k], pct: (t[k] - base) / base * 100, manual: t.manual })) };
       if (level !== "normal") {
         let start = bone.length - 1; while (start > 0 && bone[start - 1].day > 1 && (B.both ? Math.abs((bone[start - 1][k] - base) / base * 100) : (bone[start - 1][k] - base) / base * 100) >= B.att) start--;
         obs.push({
-          key: `bone-${k}-${bone[start].day}`, created_day: bone[start].day, metric: B.label, metricKey: k, level, method: "% change vs individual pre-flight baseline",
+          key: `bone-${k}-${bone[start].day}`, created_day: bone[start].day, metric: B.label, metricKey: k, level, method: confirmed ? "% change vs baseline · confirmed by repeat test" : "% change vs baseline · awaiting repeat test",
           title: k === "urine_creatinine" ? "Urinary creatinine differs from baseline" : `${B.label} increased vs individual baseline`,
           prev: base, cur: last[k], unit: B.unit, pct, dp: B.dp, prevLabel: "Pre-flight baseline", curLabel: `Test day ${last.day}`,
           explanation: k === "urine_creatinine"

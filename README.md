@@ -46,7 +46,7 @@ Scientific guardrails built into the app:
 2. **7-day moving average** smooths day-to-day noise.
 3. **Z-score** = (7-day average − baseline mean) / baseline SD. A value ≥ 2 raises *Attention*; ≥ 3 raises *Critical*.
 4. **Isolation Forest** (Liu, Ting & Zhou 2008) runs on six z-scored vital signs: 200 trees, ψ = 64, and a day is flagged when its anomaly score is ≥ 0.62. It starts once at least 30 days are available.
-5. **Bone rules:** Ca²⁺ +20 % / +40 %; NTx and CTX +30 % / +60 %; creatinine ±15 % triggers a check on collection quality. A combined observation fires when two or more markers rise together.
+5. **Bone rules:** Ca²⁺ +20 % / +40 %; NTx and CTX +30 % / +60 %; creatinine ±15 % triggers a check on collection quality. A combined observation fires when two or more markers rise together. **Confirmation rule:** a single urine test can raise Attention, but Critical requires the previous test to be above threshold as well.
 6. Each observation ends with a **monitoring or review step** for the medical officer, never with a diagnosis or treatment instruction.
 
 `analysis/build_demo_data.py` generates the demo data (seed 2026) and runs the same pipeline with **pandas and scikit-learn**. On the demo record, the in-browser engine and `sklearn.ensemble.IsolationForest` flag the same days (86–91 for the Commander).
@@ -54,6 +54,24 @@ Scientific guardrails built into the app:
 ```bash
 pip install numpy pandas scikit-learn
 python analysis/build_demo_data.py --osd575 OSD_575_data
+```
+
+## Method check on real NASA data (OSD-575)
+
+`analysis/validate_osd575.py` applies the same personal-baseline method to the **real** serum chemistry of the four Inspiration4 crew members (14 analytes, NASA OSDR OSD-575). The baseline is the mean of the three pre-flight samples (L-92, L-44, L-3), with the SD floored at 3 % of the mean; a post-flight value is flagged when |z| ≥ 2. Results are shown on the AI Analysis page.
+
+| Time point | Flagged vs personal baseline | Outside lab reference range | Flagged but inside lab range |
+|---|---|---|---|
+| R+1 (day after landing) | 14 / 56 | 4 / 56 | 10 |
+| R+45 | 14 / 55 | 5 / 55 | 11 |
+| R+82 | 8 / 56 | 0 / 56 | 8 |
+| R+194 | 12 / 56 | 4 / 56 | 9 |
+
+**What this shows:** personal baselines detect changes that standard lab ranges call normal (10 of 14 flags the day after landing).
+**What it does not show:** the method still flags 12 values six months after the flight, so three pre-flight samples underestimate natural variation. These are detected changes, not health effects. This is why vital signs are judged on 7-day averages, bone alerts need a repeat test to reach Critical, and calibration on long-duration OSDR data is the next step.
+
+```
+python analysis/validate_osd575.py OSD_575_data/LSDS-8_Comprehensive_Metabolic_Panel_CMP.upload_SUBMITTED.csv
 ```
 
 ## Use of artificial intelligence
