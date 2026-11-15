@@ -583,14 +583,18 @@
     const dz = state.donki, key = store.apiKey || "DEMO_KEY", types = Object.keys(DTYPES);
     dz.status = "loading"; dz.msg = ""; if (state.view === "radiation") render(true);
     try {
-      const res = await Promise.all(types.map(t => fetch(`https://api.nasa.gov/DONKI/${t}?startDate=${dz.from}&endDate=${dz.to}&api_key=${encodeURIComponent(key)}`).then(r => { if (r.status === 429) throw new Error("rate"); if (!r.ok) throw new Error("http " + r.status); return r.text(); }).then(tx => parseDonki(t, tx ? JSON.parse(tx) : []))));
+      const get = (t, url) => fetch(url).then(r => { if (r.status === 429) throw new Error("rate"); if (!r.ok) throw new Error("http " + r.status); return r.text(); }).then(tx => parseDonki(t, tx ? JSON.parse(tx) : []));
+      const q = t => `${t}?startDate=${dz.from}&endDate=${dz.to}`;
+      let res, src = "ccmc.gsfc.nasa.gov/DONKI-API";
+      try { res = await Promise.all(types.map(t => get(t, `https://ccmc.gsfc.nasa.gov/DONKI-API/get/${q(t)}`))); }
+      catch (e1) { src = "api.nasa.gov/DONKI"; res = await Promise.all(types.map(t => get(t, `https://api.nasa.gov/DONKI/${q(t)}&api_key=${encodeURIComponent(key)}`))); }
       dz.events = res.flat(); dz.status = "live"; dz.fetchedAt = Date.now();
-      dz.msg = `Loaded ${dz.events.length} events from api.nasa.gov/DONKI (${dz.from} → ${dz.to})${key === "DEMO_KEY" ? " using DEMO_KEY — add your own free key in Settings for higher rate limits." : "."}`;
+      dz.msg = `Loaded ${dz.events.length} events from ${src} (${dz.from} → ${dz.to}).`;
       try { localStorage.setItem("spacevitals_donki", JSON.stringify({ fetchedAt: dz.fetchedAt, from: dz.from, to: dz.to, events: dz.events })); } catch (e) { /* ignore */ }
       logEvent(`NASA DONKI: ${dz.events.length} space-weather events loaded`);
     } catch (err) {
       let cached = null; try { cached = JSON.parse(localStorage.getItem("spacevitals_donki") || "null"); } catch (e) { /* ignore */ }
-      const why = err.message === "rate" ? "NASA API rate limit reached (DEMO_KEY allows few requests per hour)." : "NASA DONKI could not be reached from this page (offline or blocked).";
+      const why = err.message === "rate" ? "NASA API rate limit reached." : "NASA DONKI could not be reached from this page (offline or blocked).";
       if (cached && cached.events) { dz.events = cached.events.map(e => ({ ...e, date: new Date(e.date) })); dz.status = "cached"; dz.fetchedAt = cached.fetchedAt; dz.msg = `${why} Showing cached NASA data from ${new Date(cached.fetchedAt).toLocaleString("en-GB")} (${cached.from} → ${cached.to}).`; }
       else { dz.events = sampleEvents(); dz.status = "sample"; dz.msg = `${why} Showing clearly labelled SAMPLE events — these are not real NASA data.`; }
     }
@@ -687,9 +691,9 @@
   function vSettings() {
     return `<div class="ph"><div><div class="h1">Settings</div><div class="sub">Data sources, API access and demo controls</div></div></div>
     <div class="grid g2">
-      <div class="card"><h3><span class="l">NASA Open APIs</span>${NASA("api.nasa.gov")}</h3>
-        <label class="field">NASA API key (free at api.nasa.gov)<input class="input" id="apiKey" type="password" placeholder="DEMO_KEY is used when empty" value="${esc(store.apiKey)}" autocomplete="off"></label>
-        <p class="sub" style="font-size:12px;margin:8px 0 12px">This static build calls NASA DONKI from your browser, so a key entered here is stored only in this browser (localStorage). In the full-stack architecture (README) the FastAPI backend holds the key in an environment variable.</p>
+      <div class="card"><h3><span class="l">NASA DONKI API</span>${NASA("CCMC DONKI")}</h3>
+        <label class="field">NASA API key (optional, only for the api.nasa.gov fallback)<input class="input" id="apiKey" type="password" placeholder="DEMO_KEY is used when empty" value="${esc(store.apiKey)}" autocomplete="off"></label>
+        <p class="sub" style="font-size:12px;margin:8px 0 12px">Since 30 Sep 2026 DONKI is served by NASA CCMC at ccmc.gsfc.nasa.gov/DONKI-API without a key; the app calls it directly from your browser. A key entered here is used only if that fails, and is stored only in this browser (localStorage). In the full-stack architecture (README) the FastAPI backend holds the key in an environment variable.</p>
         <div style="display:flex;gap:10px;flex-wrap:wrap"><button class="btn" id="saveKey">${I(ICON.check, 16)}Save key</button><button class="btn ghost" id="testKey">${I(ICON.refresh, 16)}Test DONKI connection</button></div></div>
       <div class="card"><h3>Demo data</h3>
         <p class="sub" style="margin-bottom:12px">Manual measurements, urine results and records you add are kept in this browser. Export them or reset to the original demo scenario.</p>

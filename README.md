@@ -28,7 +28,7 @@ The demo is published with GitHub Pages; the link is in the repository descripti
 
 | Source | How it is used | Label in the app |
 |---|---|---|
-| **NASA DONKI** (Space Weather Database Of Notifications, Knowledge, Information; CCMC) via `api.nasa.gov/DONKI/` FLR, CME, SEP, GST | Fetched live in the browser; event list and timeline on the Radiation Monitor page, with a cache and a clearly labelled offline sample | `LIVE · NASA DONKI` / `CACHED` / `SAMPLE` |
+| **NASA DONKI** (Space Weather Database Of Notifications, Knowledge, Information; CCMC) via `ccmc.gsfc.nasa.gov/DONKI-API/get/` (no key; `api.nasa.gov/DONKI` as fallback) FLR, CME, SEP, GST | Fetched live in the browser; event list and timeline on the Radiation Monitor page, with a cache and a clearly labelled offline sample | `LIVE · NASA DONKI` / `CACHED` / `SAMPLE` |
 | **NASA OSDR OSD-575** (Inspiration4 / LSDS-8, Comprehensive Metabolic Panel) | Real pre- and post-flight serum calcium, alkaline phosphatase, creatinine, potassium and sodium of 4 crew members (crew mean, min–max, lab range). Shown as the scientific reference on Bone Health and Medical Records | `NASA OSDR · OSD-575` |
 | **MSL/RAD** measurements (NASA Mars Science Laboratory) | ~1.84 mSv/day deep-space cruise dose rate, which anchors the simulated dosimeter | cited in the app |
 | **NASA-STD-3001** | 600 mSv career effective-dose limit, shown as context | cited in the app |
@@ -88,7 +88,7 @@ backend/schema.sql              PostgreSQL schema for the planned FastAPI backen
 
 ## References
 
-- NASA DONKI — Space Weather Database Of Notifications, Knowledge, Information. NASA Community Coordinated Modeling Center (CCMC). https://ccmc.gsfc.nasa.gov/tools/DONKI/ · API: https://api.nasa.gov/
+- NASA DONKI — Space Weather Database Of Notifications, Knowledge, Information. NASA Community Coordinated Modeling Center (CCMC). https://ccmc.gsfc.nasa.gov/tools/DONKI/ · API: https://ccmc.gsfc.nasa.gov/DONKI-API/get/
 - NASA Open Science Data Repository, OSD-575: SpaceX Inspiration4 (LSDS-8) blood serum metabolic panel. https://osdr.nasa.gov/bio/repo/data/studies/OSD-575
 - Zeitlin C. et al. (2013). Measurements of energetic particle radiation in transit to Mars on the Mars Science Laboratory. *Science* 340, 1080–1084.
 - LeBlanc A. et al. (2000). Bone mineral and lean tissue loss after long duration space flight. *J Musculoskelet Neuronal Interact* 1(2), 157–160.
