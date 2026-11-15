@@ -30,6 +30,7 @@
     creat: "Check sample collection completeness and timing before interpreting creatinine-normalised markers; repeat collection.",
   };
   const LV = { normal: 0, attention: 1, critical: 2 };
+  const PERSIST_DAYS = 3; // persistence window for vital-sign alerts
   const maxLevel = arr => arr.reduce((a, b) => LV[b] > LV[a] ? b : a, "normal");
 
   const mean = a => a.reduce((s, x) => s + x, 0) / a.length;
@@ -85,6 +86,10 @@
       const i = vitals.length - 1, zi = z[i], last = vals[i];
       const signed = M.dir === "low" ? -zi : M.dir === "high" ? zi : Math.abs(zi);
       let level = signed >= 3 ? "critical" : signed >= 2 ? "attention" : "normal";
+      // Persistence window: the 7-day average must stay beyond 2 SD for PERSIST_DAYS consecutive days.
+      const sz = j => (z[j] === null || z[j] === undefined) ? -Infinity : (M.dir === "low" ? -z[j] : M.dir === "high" ? z[j] : Math.abs(z[j]));
+      let run = 0; for (let j = i; j >= 0 && sz(j) >= 2; j--) run++;
+      if (level !== "normal" && run < PERSIST_DAYS) level = "normal";
       const pct = (ma[i] - b.mean) / b.mean * 100;
       if (level !== "normal") {
         // first day of the current episode, for alert history
@@ -181,6 +186,16 @@
       });
     }
 
+    // Multi-modal confirmation: a vital-sign alert can be Critical only if another independent signal agrees
+    // (another vital sign out of range, or an Isolation Forest flag). Otherwise it stays at Attention.
+    const vitObs = obs.filter(o => o.key.startsWith("vit-"));
+    const ifActive = obs.some(o => o.metricKey === "multi");
+    vitObs.forEach(o => {
+      const others = vitObs.filter(x => x !== o).length;
+      o.confirmedBy = others ? `${others} other vital sign${others > 1 ? "s" : ""}` + (ifActive ? " + Isolation Forest" : "") : ifActive ? "Isolation Forest" : null;
+      if (o.level === "critical" && !o.confirmedBy) { o.level = "attention"; o.method += " · not yet confirmed by a 2nd signal"; }
+      else if (o.confirmedBy) o.method += " · confirmed by " + o.confirmedBy;
+    });
     obs.sort((a, b) => LV[b.level] - LV[a.level] || b.created_day - a.created_day);
     return { obs, series, ifRes, boneRes, level: maxLevel(obs.map(o => o.level)), baselineReady: day > BASE_DAYS && enoughBaseline };
   }
@@ -200,5 +215,5 @@
     return p;
   }
 
-  window.SVAnalytics = { analyze, boneNarrative, movingAverage, isolationForest, METRICS, BONE, LV, maxLevel, IF_THRESHOLD, BASE_DAYS };
+  window.SVAnalytics = { analyze, boneNarrative, movingAverage, isolationForest, METRICS, BONE, LV, maxLevel, IF_THRESHOLD, BASE_DAYS, PERSIST_DAYS };
 })();
