@@ -18,7 +18,7 @@ The demo is published with GitHub Pages; the link is in the repository descripti
 | **Overview** | Welcome header, mission day selector (1–120), six metric cards with sparklines, 7-day trend chart, health status panel with the latest AI observation, demo milestones |
 | **Health Dashboard** | Metric and date-range filters, daily values with a 7-day moving average, a ±2 SD baseline band and Isolation Forest markers, plus *Add measurement* |
 | **Bone Health** | Urinary Ca²⁺, NTx, CTX and creatinine against the individual baseline, a trend chart, before/during/after comparison, AI bone analysis, lab table, *Add urine result*, an education section, and a **real NASA reference** (Inspiration4 serum chemistry, OSD-575) |
-| **AI Analysis** | Risk observations (metric, previous and current value, % change, explanation, next action), three alert levels, Isolation Forest score chart, **Python/scikit-learn cross-check**, alert history with acknowledge |
+| **Risk Analysis** | Risk observations (metric, previous and current value, % change, explanation, next action), three alert levels, Isolation Forest score chart, **Python/scikit-learn cross-check**, alert history with acknowledge |
 | **Radiation Monitor** | **NASA DONKI** FLR, CME, SEP and GST events with a timeline and date and type filters; simulated personal dosimeter |
 | **Medical Records** | Search, type filter, sorting, add record with lab-report upload, record details, comparison over time, OSD-575 reference |
 | **Crew Monitoring** | Four fictional crew cards; click one to open that astronaut's dashboard |
@@ -58,7 +58,7 @@ python analysis/build_demo_data.py --osd575 OSD_575_data
 
 ## Method check on real NASA data (OSD-575)
 
-`analysis/validate_osd575.py` applies the same personal-baseline method to the **real** serum chemistry of the four Inspiration4 crew members (14 analytes, NASA OSDR OSD-575). The baseline is the mean of the three pre-flight samples (L-92, L-44, L-3), with the SD floored at 3 % of the mean; a post-flight value is flagged when |z| ≥ 2. Results are shown on the AI Analysis page.
+`analysis/validate_osd575.py` applies the same personal-baseline method to the **real** serum chemistry of the four Inspiration4 crew members (14 analytes, NASA OSDR OSD-575). The baseline is the mean of the three pre-flight samples (L-92, L-44, L-3), with the SD floored at 3 % of the mean; a post-flight value is flagged when |z| ≥ 2. Results are shown on the Risk Analysis page.
 
 | Time point | Flagged vs personal baseline | Outside lab reference range | Flagged but inside lab range |
 |---|---|---|---|
@@ -77,7 +77,7 @@ python analysis/validate_osd575.py OSD_575_data/LSDS-8_Comprehensive_Metabolic_P
 ## Use of artificial intelligence
 
 - **Development tool:** Claude (Anthropic), a generative AI assistant, was used to write the source code (HTML, CSS, JavaScript, Python, SQL), the demo-data generator, interface text and this README. The team reviewed, ran and tested the result. Each code file carries an AI-disclosure comment in its header.
-- **In the product:** the "AI Analysis" is **not** a generative model. It is transparent statistics plus an Isolation Forest (unsupervised machine learning), implemented in plain JavaScript and cross-checked with scikit-learn.
+- **In the product:** the "Risk Analysis" page is **not** a generative model. It is transparent statistics plus an Isolation Forest (unsupervised machine learning), implemented in plain JavaScript and cross-checked with scikit-learn.
 - **Media:** no AI-generated images, audio or video are used. The logo is a simple vector drawing in the code. No NASA logos, flags or mission insignia are used or modified.
 
 ## Architecture
@@ -115,9 +115,13 @@ backend/schema.sql              PostgreSQL schema for the planned FastAPI backen
 - Pedregosa F. et al. (2011). Scikit-learn: Machine Learning in Python. *JMLR* 12, 2825–2830.
 - Interface icon shapes adapted from Lucide (https://lucide.dev), ISC License.
 
-## Limitations
+## Scientific limitations & validation roadmap
 
-All crew data is simulated. The thresholds are illustrative and have not been clinically validated. The next step is to calibrate them on real long-duration data from NASA OSDR and to connect real wearable and laboratory devices.
+SPACEVITALS is a proof of concept (TRL 3). All crew data in the demo is simulated; bone-marker trajectories were designed by hand to follow magnitudes published by NASA (bone resorption ~50 % higher in flight, urinary collagen cross-links up to twice the pre-flight level; Smith et al., NASA JSC). The Isolation Forest threshold (0.62) was selected on simulated data and must be re-tuned on real data; the anomaly on days 86–91 was placed in the simulation to test the detector. The personal-baseline method was checked on real NASA OSDR data (OSD-575, Inspiration4): it detected 10 post-flight changes missed by lab reference ranges, but also flagged values six months later, showing that three pre-flight samples are too few for a stable baseline. We do not combine animal and human data, and we do not model the ECLSS water loop; both are outside the scope of this prototype.
+
+**Alert-fatigue safeguards in the code:** vital signs are judged on 7-day averages and must stay beyond 2 SD for 3 consecutive days (persistence window); a vital-sign alert reaches Critical only when a second independent signal agrees (another vital sign or Isolation Forest); a bone marker reaches Critical only when a repeat test confirms it.
+
+**Roadmap:** (1) calibrate thresholds on long-duration ISS data through NASA's data request process; (2) test the alert logic in a ground analog such as HERA; (3) connect real wearables and on-board urine analysis.
 
 ## License
 

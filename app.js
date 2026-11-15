@@ -36,7 +36,7 @@
     sleep: '<path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/>',
     rad: '<circle cx="12" cy="12" r="2"/><path d="M12 2a10 10 0 0 1 8.66 5L15.46 10A4 4 0 0 0 12 8ZM3.34 7A10 10 0 0 1 12 2v6a4 4 0 0 0-3.46 2ZM12 22a10 10 0 0 1-8.66-5l5.2-3a4 4 0 0 0 6.92 0l5.2 3A10 10 0 0 1 12 22Z"/>',
   };
-  const NAV = [["overview", "Overview"], ["health", "Health Dashboard"], ["bone", "Bone Health"], ["ai", "AI Analysis"], ["radiation", "Radiation Monitor"], ["records", "Medical Records"], ["crew", "Crew Monitoring"], ["preferences", "Settings"]];
+  const NAV = [["overview", "Overview"], ["health", "Health Dashboard"], ["bone", "Bone Health"], ["ai", "Risk Analysis"], ["radiation", "Radiation Monitor"], ["records", "Medical Records"], ["crew", "Crew Monitoring"], ["preferences", "Settings"]];
 
   /* ================= persistent store (this browser only) ================= */
   const KEY = "spacevitals_v1";
@@ -142,8 +142,9 @@
   function metricLevel(an, m) {
     const s = an.series[m]; if (!s || !s.baseline || !an.baselineReady) return "none";
     const z = s.z[s.z.length - 1]; if (z === null) return "none";
-    const dir = A.METRICS[m].dir, v = dir === "low" ? -z : Math.abs(z);
-    return v >= 3 ? "critical" : v >= 2 ? "attention" : "normal";
+    // Same level as the alert engine (persistence window + multi-signal confirmation), so cards and alerts never disagree.
+    const o = an.obs.find(x => x.metricKey === m && x.key.startsWith("vit-"));
+    return o ? o.level : "normal";
   }
   const levelTxt = { normal: "Normal", attention: "Attention", critical: "Critical", none: "Baseline pending" };
   function metricCard(m, rows, an) {
@@ -166,6 +167,13 @@
       <div class="meta"><span>Σ ${cum.toFixed(0)} mSv this mission · personal dosimeter</span>${SIM}</div></div>`;
   }
   function drawSparks(root = document) { $$(".spark", root).forEach(el => C.sparkline(el, JSON.parse(el.dataset.spark), el.dataset.color)); }
+  const topPriority = an => {
+    if (!an.baselineReady) return "";
+    const o = an.obs.find(x => x.level === "critical") || an.obs.find(x => x.level === "attention");
+    const a = astro();
+    if (!o) return `<div class="banner info" style="border-color:rgba(34,197,94,.45)">${I(ICON.check, 16)}<div><b>Top priority today:</b> nothing — all of ${esc(a.full_name)}'s monitored measurements are within the personal baseline.</div></div>`;
+    return `<div class="banner ${o.level === "critical" ? "crit" : "warn"}" style="border-width:2px">${I(ICON.alert, 16)}<div><b>Top priority today · ${esc(a.full_name)}:</b> ${esc(o.title)}${o.pct !== null && o.pct !== undefined && isFinite(o.pct) ? ` (${o.pct > 0 ? "+" : ""}${o.pct.toFixed(0)}% vs baseline)` : ""}. <b>Next:</b> ${esc(o.next)}</div></div>`;
+  };
   const demoBanner = () => `<div class="banner">${I(ICON.info, 16)}<div><b style="color:#c4b5fd">Demonstration data.</b> Crew, vital signs, urine biomarkers and dosimeter readings are <b>simulated</b> (fictional astronauts) until real sources are connected. Items tagged ${NASA()} come from NASA open data (DONKI, OSDR).</div></div>`;
 
 
@@ -274,6 +282,7 @@
     return `
     <div class="ph"><div><div class="sub">${esc(a.mission)} · ${esc(D0.mission.phase)}</div><div class="h1">Welcome back, ${esc(greet)}</div><div class="sub">Mission Day <b style="color:#fff">${state.day}</b> · ${fmtDate(state.day)} · ${esc(a.full_name)}, ${esc(a.role)}</div></div>
       <div style="display:flex;gap:10px;flex-wrap:wrap"><button class="btn ghost" data-go="crew">${I(ICON.crew, 16)}Crew</button><button class="btn" id="reportBtn" ${state.day < 90 ? "disabled title='Available from mission day 90'" : ""}>${I(ICON.file, 16)}Medical officer report</button></div></div>
+    ${topPriority(an)}
     ${demoBanner()}
     <div class="grid g6" style="margin-bottom:16px">${["heart_rate", "spo2", "bp", "body_temperature", "sleep_hours"].map(m => metricCard(m, rows, an)).join("")}${radiationCard()}</div>
     <div class="grid ovgrid" style="margin-bottom:16px" id="ovRow">
@@ -289,9 +298,7 @@
         </dl>
         <div class="ai" style="margin-top:14px"><div class="ic" style="color:var(--cyan)">${I(ICON.spark, 18)}</div><div><div style="font-size:11.5px;color:var(--mu);font-weight:700;letter-spacing:.5px;text-transform:uppercase;margin-bottom:3px">Latest AI observation</div><p>${top ? esc(top.explanation) : an.baselineReady ? "No measurement is outside this astronaut's individual baseline range." : "Collecting the first 14 days of data to build this astronaut's personal baseline."}</p></div></div>
       </div>
-    </div>
-    <div class="card"><h3><span class="l">Demonstration scenario · MARS EXPLORATION MISSION — DAY 120 ${SIM}</span><span class="sub">click a milestone</span></h3>
-      <div class="timeline">${MILESTONES.map(([d, t]) => `<div class="ms ${state.day >= d ? "done" : ""} ${state.day === d ? "cur" : ""}" data-day="${d}"><div class="dot"></div><b>Day ${d}</b><span>${t}</span></div>`).join("")}</div></div>`;
+    </div>`;
   }
   function pOverview() {
     drawSparks($("#view"));
@@ -394,6 +401,7 @@
     <div class="ph"><div><div class="h1">Bone Health</div><div class="sub">Urine biomarkers of bone metabolism · ${esc(a.full_name)} ${SIM}</div></div>
       <button class="btn" id="addUrineBtn">${I(ICON.plus, 16)}Add urine lab result</button></div>
     <div class="banner warn">${I(ICON.alert, 16)}<div><b style="color:#fde68a">What these markers can and cannot tell you.</b> Urine biomarkers reflect bone <i>turnover activity</i> (resorption). They do <b>not</b> measure bone mineral density and cannot diagnose osteoporosis. Bone density and structure require DXA or other clinical imaging (e.g. QCT).</div></div>
+    <div class="banner info" style="margin-top:-4px">${I(ICON.info, 16)}<div><b>Why these thresholds.</b> Attention at +30 % and Critical at +60 % for NTx/CTX (+20/+40 % for calcium) sit inside the range NASA studies report for spaceflight: bone resorption about 50 % higher in flight, urinary collagen cross-links up to twice the pre-flight level (Smith et al., NASA JSC). The simulated marker trajectories were designed by hand to stay within these published magnitudes. Thresholds are illustrative, not clinically validated. Critical requires confirmation by a repeat test.</div></div>
     <div class="grid g4" style="margin-bottom:16px">${Object.keys(A.BONE).map(k => {
       const B = A.BONE[k], r = br[k];
       if (!r) return `<div class="card"><h3>${B.label}</h3><div class="empty">No results yet</div></div>`;
@@ -481,9 +489,10 @@
     const pyA = PY && PY.by_astronaut[state.astro];
     const hist = historyFor(state.astro);
     return `
-    <div class="ph"><div><div class="h1">AI Analysis</div><div class="sub">${esc(a.full_name)} · data up to mission day ${state.day}</div></div>
+    <div class="ph"><div><div class="h1">Risk Analysis</div><div class="sub">${esc(a.full_name)} · data up to mission day ${state.day}</div></div>
       <div style="display:flex;gap:10px;flex-wrap:wrap"><button class="btn ghost" id="exportAlerts">${I(ICON.download, 16)}Export alerts (JSON)</button><button class="btn" id="reportBtn" ${state.day < 90 ? "disabled title='Available from mission day 90'" : ""}>${I(ICON.file, 16)}Medical officer report</button></div></div>
     <div class="banner info">${I(ICON.info, 16)}<div>The analysis compares each astronaut with <b>their own baseline</b>, detects unusual changes and combinations, and explains them in plain language. It <b>does not</b> produce diagnoses or treatment instructions — every observation ends with a monitoring or review step for the crew medical officer.</div></div>
+    ${topPriority(an)}
     <div class="grid g4" style="margin-bottom:16px">
       <div class="card"><h3>Overall level</h3>${stBadge(an.baselineReady ? an.level : "none", an.baselineReady ? undefined : "Baseline pending")}<div class="sub" style="margin-top:8px">${an.obs.length} observation${an.obs.length === 1 ? "" : "s"}</div></div>
       <div class="card"><h3>Critical</h3><div class="metric"><div class="v" style="color:var(--crit)">${cnt("critical")}</div></div></div>
@@ -491,18 +500,18 @@
       <div class="card"><h3>Data used</h3><div class="sub">${vitals().length} days of vitals · ${bone().length} urine tests · baseline days 1–14</div></div>
     </div>
     <div class="card" style="margin-bottom:16px"><h3><span class="l">${I(ICON.spark, 17)} Risk observations</span><span class="seg" id="lvlSeg">${["all", "critical", "attention"].map(l => `<button data-l="${l}" class="${f === l ? "on" : ""}">${l[0].toUpperCase() + l.slice(1)}</button>`).join("")}</span></h3>
-      <div class="list">${obs.length ? obs.map(o => `<div class="obs ${o.level}">
+      <div class="list">${obs.length ? obs.map((o, oi) => `${oi === 3 ? `<details class="more"><summary class="btn ghost" style="width:max-content">Show all ${obs.length} observations</summary><div class="list" style="margin-top:12px">` : ""}<div class="obs ${o.level}">
         <div class="hd"><div class="t">${esc(o.title)}</div><div style="display:flex;gap:8px;align-items:center">${stBadge(o.level)}<span class="tag sim" style="color:var(--mu);border-color:var(--line2);background:none">${esc(o.method)}</span></div></div>
         <div class="nums"><span>Metric <b>${esc(o.metric)}</b></span>${o.prev !== null ? `<span>${o.prevLabel} <b>${fx(o.prev, o.dp + (o.unit === "score" ? 0 : 1))} ${o.unit}</b></span>` : ""}${o.cur !== null ? `<span>${o.curLabel} <b>${fx(o.cur, o.dp + (o.unit === "score" ? 0 : 1))} ${o.unit}</b></span>` : ""}${o.pct !== null && o.pct !== undefined ? `<span>Change <b style="color:${LVC[o.level]}">${sign(o.pct)}</b></span>` : ""}${o.z !== undefined && o.z !== null ? `<span>z <b>${o.z.toFixed(2)}</b></span>` : ""}<span>Since <b>${dayLabel(o.created_day)}</b></span></div>
         <div class="ex">${esc(o.explanation)}</div>
-        <div class="nx"><b style="color:var(--cyan)">Recommended next action:</b> ${esc(o.next)}</div></div>`).join("") : `<div class="empty">${an.baselineReady ? "No observations at this level — all monitored measurements are within the individual baseline range." : "Baseline is being established (mission days 1–14). Analysis starts on day 15."}</div>`}</div></div>
+        <div class="nx"><b style="color:var(--cyan)">Recommended next action:</b> ${esc(o.next)}</div></div>${oi === obs.length - 1 && obs.length > 3 ? "</div></details>" : ""}`).join("") : `<div class="empty">${an.baselineReady ? "No observations at this level — all monitored measurements are within the individual baseline range." : "Baseline is being established (mission days 1–14). Analysis starts on day 15."}</div>`}</div></div>
     <div class="grid g2" style="margin-bottom:16px">
       <div class="card"><h3><span class="l">Isolation Forest · daily anomaly score</span><span class="sub">6 vital signs, z-scored to baseline</span></h3>
-        ${an.ifRes.status === "ok" ? `<div class="chart" id="ifChart"></div><div class="legend"><span><i style="background:#22D3EE"></i>Anomaly score</span><span><i style="background:#ef4444"></i>Threshold ${A.IF_THRESHOLD}</span><span>Flagged days: <b style="color:#fff">${an.ifRes.flagged.length ? an.ifRes.flagged.join(", ") : "none"}</b></span></div>` : `<div class="empty">Isolation Forest needs at least 30 days of data (currently ${vitals().length}).</div>`}</div>
-      <div class="card"><h3><span class="l">Python cross-check · pandas + scikit-learn</span></h3>
+        ${an.ifRes.status === "ok" ? `<div class="chart" id="ifChart"></div><div class="legend"><span><i style="background:#22D3EE"></i>Anomaly score</span><span><i style="background:#ef4444"></i>Threshold ${A.IF_THRESHOLD}</span><span>Flagged days: <b style="color:#fff">${an.ifRes.flagged.length ? an.ifRes.flagged.join(", ") : "none"}</b></span></div><div class="sub" style="font-size:11.5px;margin-top:6px">Threshold ${A.IF_THRESHOLD} was selected on simulated data and must be re-tuned on real crew data. The anomaly on days 86–91 was placed in the simulation to test the detector.</div>` : `<div class="empty">Isolation Forest needs at least 30 days of data (currently ${vitals().length}).</div>`}</div>
+      <div class="card"><details><summary style="cursor:pointer;list-style:none"><h3 style="margin:0"><span class="l">Technical details · Python cross-check &amp; methods</span><span class="sub">click to expand</span></h3></summary><div style="margin-top:12px">
         ${pyA ? `<p class="sub" style="margin-bottom:10px">The same pipeline was run offline with <code>sklearn.ensemble.IsolationForest</code> on the full 120-day demo record (<code>analysis/build_demo_data.py</code>).</p>
         <dl class="kv"><dt>scikit-learn flagged days</dt><dd>${pyA.isolation_forest.flagged_days.join(", ") || "none"}</dd><dt>In-browser engine (to day ${state.day})</dt><dd>${(an.ifRes.flagged || []).join(", ") || "none"}</dd><dt>Agreement</dt><dd>${agreement(pyA.isolation_forest.flagged_days, an.ifRes.flagged || [])}</dd><dt>Parameters</dt><dd style="font-weight:400;font-size:12px">${esc(pyA.isolation_forest.params)}</dd></dl>
-        <h3 style="margin-top:16px">Methods</h3><dl class="kv" style="font-size:12.5px"><dt>Moving average</dt><dd style="font-weight:400;text-align:left">7-day window smooths day-to-day noise.</dd><dt>Z-score</dt><dd style="font-weight:400;text-align:left">(7-day avg − baseline mean) / baseline SD; ≥2 attention, ≥3 critical.</dd><dt>Isolation Forest</dt><dd style="font-weight:400;text-align:left">Finds days whose combination of vitals is easy to isolate (unusual), even if each value is only mildly off.</dd></dl>` : `<div class="empty">py_analysis.js not found.</div>`}</div>
+        <h3 style="margin-top:16px">Methods</h3><dl class="kv" style="font-size:12.5px"><dt>Moving average</dt><dd style="font-weight:400;text-align:left">7-day window smooths day-to-day noise.</dd><dt>Z-score</dt><dd style="font-weight:400;text-align:left">(7-day avg − baseline mean) / baseline SD; ≥2 attention, ≥3 critical.</dd><dt>Isolation Forest</dt><dd style="font-weight:400;text-align:left">Finds days whose combination of vitals is easy to isolate (unusual), even if each value is only mildly off.</dd></dl>` : `<div class="empty">py_analysis.js not found.</div>`}</div></details></div>
     </div>
     ${valCard()}
     <div class="card"><h3><span class="l">Alert history</span><span class="sub">${hist.length} alerts · first raised day shown</span></h3>
